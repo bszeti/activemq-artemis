@@ -16,15 +16,11 @@
  */
 package org.apache.activemq.artemis.jms.example;
 
-import java.util.Enumeration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import javax.jms.Message;
-import javax.jms.QueueBrowser;
-import javax.jms.Session;
 
 import org.apache.activemq.artemis.util.ServerUtil;
 import org.slf4j.Logger;
@@ -110,33 +106,32 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
             Thread.sleep(1000);
          }
 
-         log.info("Wait a bit more before shutdown...");
-         Thread.sleep(15000);
-
          log.info("Counting...");
-         
-         int targetCount = jmsTemplate.browse(targetQueue, (Session session, QueueBrowser browser) ->{
-            Enumeration enumeration = browser.getEnumeration();
-            int counter = 0;
-            while (enumeration.hasMoreElements()) {
-               Message msg = (Message) enumeration.nextElement();
-               counter += 1;
-            }
-            return counter;
-         });
 
-         int DLQCount = jmsTemplate.browse("DLQ", (Session session, QueueBrowser browser) ->{
-            Enumeration enumeration = browser.getEnumeration();
-            int counter = 0;
-            while (enumeration.hasMoreElements()) {
-               Message msg = (Message) enumeration.nextElement();
-               log.info("DLQ message: {} - {}",msg.getStringProperty("_AMQ_DUPL_ID"), msg.getStringProperty("SEND_COUNTER"));
-               counter += 1;
-            }
-            return counter;
-         });
-         
+         jmsTemplate.setReceiveTimeout(1000);
+         Message msg;
+
+         int sourceCount = 0;
+         while((msg = jmsTemplate.receive(sourceQueue)) != null) {
+            sourceCount++;
+            log.info("message in source queue:" + msg.getStringProperty("SEND_COUNTER"));
+         }
+
+         int targetCount = 0;
+         while((msg = jmsTemplate.receive(targetQueue)) != null) {
+            targetCount++;
+//            log.debug("message in target queue:" + msg.getStringProperty("SEND_COUNTER"));
+         }
+
+         int DLQCount = 0;
+         while((msg = jmsTemplate.receive("DLQ")) != null) {
+            DLQCount++;
+            log.info("message in DLQ queue:" + msg.getStringProperty("SEND_COUNTER"));
+         }
+
+         log.info("Method calls - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
          log.info("Sent messages: {}",sendCounter.get());
+         log.info("Message count on source queue: {}", sourceCount);
          log.info("Message count on target queue: {}",targetCount);
          log.warn("Duplicates on DLQ: {}", DLQCount);
          //Number of messages on DLQ should be 0 for a seamless failover
@@ -189,12 +184,12 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
       //Commit
    }
 
-   @Scheduled(fixedRate = 1000)
+   @Scheduled(fixedRate = 1000) //This is also needed to update receiveCounterLast - so we can shut down receivers after all message.
    public void reportCurrentTime() {
       int current = receiveCounter.get();
       int diff = current - receiveCounterLast;
       receiveCounterLast = current;
-      log.info("sent: {}, received: {} ({}/s), forwarded: {}", sendCounter.get(), current, diff, receiveForwardedCounter.get());
+      log.debug("Method calls: sent: {}, received: {} ({}/s), forwarded: {}", sendCounter.get(), current, diff, receiveForwardedCounter.get());
    }
 
 }
