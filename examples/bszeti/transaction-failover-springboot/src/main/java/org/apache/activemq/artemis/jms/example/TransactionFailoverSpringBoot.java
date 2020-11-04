@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.jms.ConnectionFactory;
 import javax.jms.Message;
 
 import org.apache.activemq.artemis.util.ServerUtil;
@@ -30,14 +31,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.autoconfigure.jms.DefaultJmsListenerContainerFactoryConfigurer;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.context.annotation.Bean;
 import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.annotation.JmsListener;
+import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
+import org.springframework.jms.config.JmsListenerContainerFactory;
 import org.springframework.jms.config.JmsListenerEndpointRegistry;
+import org.springframework.jms.connection.JmsTransactionManager;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
 
 @EnableJms
 @EnableScheduling
@@ -162,9 +173,17 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
 
    Map<String,String> amqDuplIds = new ConcurrentHashMap<>();
 
+   @Autowired
+   private PlatformTransactionManager transactionManager;
+
+   @Transactional
    @JmsListener(destination = "${source.queue}", concurrency="${receive.concurrentConsumers}")
    public void receiveMessage(String text, @Header("SEND_COUNTER") String counter, @Header("_AMQ_DUPL_ID") String amqDuplId) {
       //Receive is transactional
+
+       DefaultTransactionDefinition def = new DefaultTransactionDefinition();
+       TransactionStatus status = transactionManager.getTransaction(def);
+
       log.debug("Received: {} - {}", amqDuplId, counter);
       receiveCounter.incrementAndGet();
       if (amqDuplIds.put(amqDuplId,counter) != null) {
@@ -177,6 +196,20 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          m.setStringProperty("_AMQ_DUPL_ID", amqDuplId);
          return m;
       });
+
+      try {
+         transactionManager.commit(status);
+      } catch (TransactionException e) {
+         log.error("TransactionException caught",e);
+         e.printStackTrace();
+//         try {
+//            Thread.sleep(30000);
+//         } catch (InterruptedException ex) {
+//            ex.printStackTrace();
+//         }
+         transactionManager.rollback(status);
+      }
+
       receiveForwardedCounter.incrementAndGet();
       log.debug("Forwarded: {} - {}", amqDuplId, counter);
 
@@ -190,6 +223,27 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
       int diff = current - receiveCounterLast;
       receiveCounterLast = current;
       log.debug("Method calls: sent: {}, received: {} ({}/s), forwarded: {}", sendCounter.get(), current, diff, receiveForwardedCounter.get());
+   }
+
+    @Bean
+   public PlatformTransactionManager transactionManager(ConnectionFactory connectionFactory) {
+      return new JmsTransactionManager(connectionFactory);
+   }
+   @Bean
+   public JmsTemplate jmsTemplate(ConnectionFactory connectionFactory) {
+      JmsTemplate template = new JmsTemplate();
+      template.setConnectionFactory(connectionFactory);
+      return template;
+   }
+   @Bean
+   public JmsListenerContainerFactory<?> msgFactory(ConnectionFactory connectionFactory,
+                                                    DefaultJmsListenerContainerFactoryConfigurer configurer,
+                                                    PlatformTransactionManager transactionManager) {
+      DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
+      factory.setTransactionManager(transactionManager);
+      factory.setReceiveTimeout(10000L);
+      configurer.configure(factory, connectionFactory);
+      return factory;
    }
 
 }
