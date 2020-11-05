@@ -126,7 +126,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          int DLQCount = 0;
          while((msg = jmsTemplate.receive("DLQ")) != null) {
             DLQCount++;
-            log.info("message in DLQ queue:" + msg.getStringProperty("SEND_COUNTER"));
+            log.info("message in DLQ queue: {} - {} ",  msg.getStringProperty("_AMQ_DUPL_ID"), msg.getStringProperty("SEND_COUNTER"));
          }
 
          log.info("Method calls - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
