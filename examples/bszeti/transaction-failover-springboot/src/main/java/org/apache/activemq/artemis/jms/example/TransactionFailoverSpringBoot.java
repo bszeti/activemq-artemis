@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.jms.ConnectionFactory;
 import javax.jms.Message;
+import javax.jms.Session;
 
 import org.apache.activemq.artemis.util.ServerUtil;
 import org.slf4j.Logger;
@@ -178,7 +179,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
 
    @Transactional
    @JmsListener(destination = "${source.queue}", concurrency="${receive.concurrentConsumers}", containerFactory = "msgFactory")
-   public void receiveMessage(String text, @Header("SEND_COUNTER") String counter, @Header("_AMQ_DUPL_ID") String amqDuplId) {
+   public void receiveMessage(String text, Session session, @Header("SEND_COUNTER") String counter, @Header("_AMQ_DUPL_ID") String amqDuplId) {
       //Receive is transactional
 
       log.debug("Received: {} - {}", amqDuplId, counter);
@@ -226,7 +227,9 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
                                                     PlatformTransactionManager transactionManager) {
       DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
       factory.setTransactionManager(transactionManager);
+      factory.setSessionTransacted(false); //this line has no impact as session will be transacted if TransactionManager is set.
       factory.setReceiveTimeout(10000L);
+       
       configurer.configure(factory, connectionFactory);
       return factory;
    }
