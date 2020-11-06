@@ -177,12 +177,9 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
    private PlatformTransactionManager transactionManager;
 
    @Transactional
-   @JmsListener(destination = "${source.queue}", concurrency="${receive.concurrentConsumers}")
+   @JmsListener(destination = "${source.queue}", concurrency="${receive.concurrentConsumers}", containerFactory = "msgFactory")
    public void receiveMessage(String text, @Header("SEND_COUNTER") String counter, @Header("_AMQ_DUPL_ID") String amqDuplId) {
       //Receive is transactional
-
-       DefaultTransactionDefinition def = new DefaultTransactionDefinition();
-       TransactionStatus status = transactionManager.getTransaction(def);
 
       log.debug("Received: {} - {}", amqDuplId, counter);
       receiveCounter.incrementAndGet();
@@ -197,24 +194,6 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          return m;
       });
 
-      try {
-         transactionManager.commit(status);
-      } catch (TransactionException e) {
-         log.error("TransactionException caught",e);
-         e.printStackTrace();
-//         try {
-//            Thread.sleep(30000);
-//         } catch (InterruptedException ex) {
-//            ex.printStackTrace();
-//         }
-         transactionManager.rollback(status);
-      }
-
-         try {
-            Thread.sleep(1);
-         } catch (InterruptedException ex) {
-            ex.printStackTrace();
-         }
 
       receiveForwardedCounter.incrementAndGet();
       log.debug("Forwarded: {} - {}", amqDuplId, counter);
