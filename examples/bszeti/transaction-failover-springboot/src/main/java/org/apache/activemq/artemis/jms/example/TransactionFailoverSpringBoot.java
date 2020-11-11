@@ -95,6 +95,9 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
    @Value("${receive.throwException}")
    Boolean throwException;
 
+   @Value("${brokerFailover}")
+   Boolean brokerFailover;
+
    @Value("${counterUpdate}")
    Integer counterUpdate;
 
@@ -128,6 +131,8 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          //Start receiving messages
          Thread.sleep(1000);
          log.info("Start listeners");
+
+         log.info("Message count before listener start - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
          jmsListenerEndpointRegistry.start();
 
 
@@ -135,8 +140,12 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          while (receiveCounter.get() < sendCount/10) {
             Thread.sleep(100);
          }
+
          //Broker failover
-         ServerUtil.killServer(server0);
+         if (brokerFailover) {
+            ServerUtil.killServer(server0);
+            log.info("Message count after failover - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
+         }
 
 
          //Wait until we received all of messages, and no more was incoming in the last second
@@ -167,7 +176,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
             log.info("message in DLQ queue: {} - {}", msg.getStringProperty("UUID"), msg.getStringProperty("SEND_COUNTER"));
          }
 
-         log.info("Message count - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
+         log.info("Message count at the end - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
          log.info("Message count on source queue: {}", sourceCount);
          log.info("Message count on target queue: {}",targetCount);
          log.warn("Message count on DLQ - duplicates: {}", DLQCount);

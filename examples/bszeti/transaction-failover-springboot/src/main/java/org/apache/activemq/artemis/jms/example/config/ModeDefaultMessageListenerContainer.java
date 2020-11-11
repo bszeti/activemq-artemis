@@ -1,6 +1,5 @@
 package org.apache.activemq.artemis.jms.example.config;
 
-import javax.jms.ConnectionFactory;
 import javax.jms.Session;
 
 import org.apache.activemq.artemis.jms.example.TransactionFailoverSpringBoot;
@@ -8,16 +7,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jms.annotation.EnableJms;
 import org.springframework.jms.annotation.JmsListener;
-import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
-import org.springframework.jms.config.JmsListenerContainerFactory;
-import org.springframework.jms.connection.JmsTransactionManager;
 import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.transaction.PlatformTransactionManager;
 
+/****
+ * In this mode the default DefaultJmsListenerContainerFactory is used which is auto-configured based on the Spring Boot properties
+ */
 @Configuration
 @ConditionalOnProperty(
     value="transaction.mode",

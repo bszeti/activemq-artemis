@@ -19,9 +19,6 @@ import org.springframework.jms.connection.JmsTransactionManager;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.transaction.PlatformTransactionManager;
 
-import static org.springframework.jms.listener.DefaultMessageListenerContainer.CACHE_AUTO;
-import static org.springframework.jms.listener.DefaultMessageListenerContainer.CACHE_CONSUMER;
-
 @Configuration
 @ConditionalOnProperty(
     value = "transaction.mode",
@@ -46,12 +43,12 @@ public class ModeTransactionManager {
     public JmsListenerContainerFactory<?> msgFactory(ConnectionFactory connectionFactory, PlatformTransactionManager transactionManager) {
         log.info("Custom JmsListenerContainerFactory is created.");
         DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
-        factory.setTransactionManager(transactionManager); //setSessionTransacted=true is set by initialize() if TransactionManager is set
+        factory.setTransactionManager(transactionManager);
+        factory.setSessionTransacted(true); //setSessionTransacted=true is required otherwise receive may not be transacted
         factory.setConnectionFactory(connectionFactory);
-        factory.setCacheLevelName(cacheLevel); //Default is CACHE_NONE if TransactionManager is set, CACHE_CONSUMER otherwise
+        factory.setCacheLevelName(cacheLevel); //Default is CACHE_AUTO which means CACHE_NONE if TransactionManager is set, CACHE_CONSUMER otherwise
+        factory.setAutoStartup(false); //We need to disable auto-startup because we want to start listeners manually after putting messages on the source queue
         factory.setReceiveTimeout(5000L);
-
-
         return factory;
     }
 
