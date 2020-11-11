@@ -62,25 +62,29 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
    @Value("${source.queue}")
    String sourceQueue;
 
-   @Value("${send.count}")
-   Integer sendCount;
-
-   @Value("${delay.beforeForward}")
-   Integer delayBeforeForward;
-
-   @Value("${delay.beforeDone}")
-   Integer delayBeforeDone;
-
-   @Value("${delay.counterUpdate}")
-   Integer delayCounterUpdate;
-
-
-
    @Value("${target.queue}")
    String targetQueue;
 
-   @Value("${addAmqDuplId}")
+   @Value("${send.count}")
+   Integer sendCount;
+
+   @Value("${receive.delayBeforeForward}")
+   Integer delayBeforeForward;
+
+   @Value("${receive.delayBeforeDone}")
+   Integer delayBeforeDone;
+
+   @Value("${receive.addAmqDuplId}")
    Boolean addAmqDuplId;
+
+   @Value("${receive.throwException}")
+   Boolean throwException;
+
+   @Value("${counterUpdate}")
+   Integer counterUpdate;
+
+   @Value("${shutDownDelay}")
+   Integer shutDownDelay;
 
    private AtomicInteger receiveCounter = new AtomicInteger();
    private AtomicInteger sendCounter = new AtomicInteger();
@@ -127,9 +131,11 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
 
          //Wait until we received all of messages, and no more was incoming in the last second
          while (receiveCounter.get() < sendCount || receiveCounter.get() > receiveCounterLast) {
-            Thread.sleep(delayCounterUpdate);
+            Thread.sleep(counterUpdate);
          }
 
+
+         Thread.sleep(shutDownDelay);
          log.info("Counting queue sizes...");
 
          jmsTemplate.setReceiveTimeout(1000);
@@ -148,7 +154,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          int DLQCount = 0;
          while((msg = jmsTemplate.receive("DLQ")) != null) {
             DLQCount++;
-            log.info("message in DLQ queue: {} - {}", msg.getStringProperty("_AMQ_DUPL_ID"), msg.getStringProperty("SEND_COUNTER"));
+            log.info("message in DLQ queue: {} - {}", msg.getStringProperty("UUID"), msg.getStringProperty("SEND_COUNTER"));
          }
 
          log.info("Message count - sent: {}, received: {}, forwarded: {}", sendCounter.get(), receiveCounter.get(), receiveForwardedCounter.get());
@@ -172,7 +178,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
    /**
     * Log message counters. It also updates receiveCounterLast, which is needed to shut down after all messages are received.
     */
-   @Scheduled(fixedDelayString = "${delay.counterUpdate}")
+   @Scheduled(fixedDelayString = "${counterUpdate}")
    public void reportCurrentTime() {
       int current = receiveCounter.get();
       int diff = current - receiveCounterLast;
@@ -196,9 +202,8 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          log.warn("Received again: {} - {}", UUID, counter);
       }
 
-      Thread.sleep(delayBeforeForward);
-
       //Send message to target queue
+      Thread.sleep(delayBeforeForward);
       this.jmsTemplate.convertAndSend(targetQueue, text, m -> {
          m.setStringProperty("SEND_COUNTER", counter);
          m.setStringProperty("UUID", UUID);
@@ -209,6 +214,11 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
       });
       log.debug("Forwarded: {} - {}", UUID, counter);
       receiveForwardedCounter.incrementAndGet();
+
+      //Optianally throw exception to test transaction boundaries
+      if (throwException) {
+         throw new RuntimeException("Exception for uuid:" + UUID);
+      }
 
       Thread.sleep(delayBeforeDone);
       log.debug("Done: {} - {}", UUID, counter);

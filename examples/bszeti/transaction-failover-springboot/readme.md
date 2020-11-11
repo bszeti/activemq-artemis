@@ -51,3 +51,28 @@ See summary output of the application:
 46098 [main] [INFO] Message count on target queue: 1000
 46098 [main] [WARNING] Duplicates on DLQ: 12
 ```
+
+Variations
+==========
+
+DEFAULT_MESSAGE_LISTENER_CONTAINER + CACHE_CONSUMER
+
+* Lots of errors, retries and DLQ messages
+* Sometimes the test execution takes much longer, it had to wait for transaction timeouts on the broker side probably
+
+JMS_TRANSACTION_MANAGER + CACHE_NONE
+
+* OK: No DLQ, no message loss
+* Probably slower as there is no caching
+
+JMS_TRANSACTION_MANAGER + CACHE_CONSUMER
+
+* App is stuck during startup
+
+JMS_TRANSACTION_MANAGER_AUTOSTARTUP_DISABLED + CACHE_NONE
+
+* DLQ messages
+
+JMS_TRANSACTION_MANAGER_AUTOSTARTUP_DISABLED + CACHE_CONSUMER
+
+* Lost messages
