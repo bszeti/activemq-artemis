@@ -46,8 +46,23 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
 
    private static Process server0;
    private static Process server1;
-   public static void main(String[] args) {
-      SpringApplication.run(TransactionFailoverSpringBoot.class, args);
+   public static void main(String[] args) throws Exception{
+
+      try {
+         //Start servers - this is needed before the main run as DefaultMessageListenerContainer tries to get a connection during start
+         server0 = ServerUtil.startServer(args[0], TransactionFailoverSpringBoot.class.getSimpleName() + "0", 0, 5000);
+         server1 = ServerUtil.startServer(args[1], TransactionFailoverSpringBoot.class.getSimpleName() + "1", 1, 5000);
+
+         //Main run
+         SpringApplication.run(TransactionFailoverSpringBoot.class, args);
+
+      } finally {
+         //Stop server
+         log.info("Shut down servers");
+         ServerUtil.killServer(server0);
+         ServerUtil.killServer(server1);
+         log.info("Done");
+      }
    }
 
    @Autowired
@@ -93,12 +108,7 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
 
    @Override
    public void run(String... args) throws Exception {
-
-
-
       try {
-         server0 = ServerUtil.startServer(args[0], TransactionFailoverSpringBoot.class.getSimpleName() + "0", 0, 5000);
-         server1 = ServerUtil.startServer(args[1], TransactionFailoverSpringBoot.class.getSimpleName() + "1", 1, 5000);
 
          //Send messages to queue, before starting receivers
          for (int i=0; i< sendCount; i++) {
@@ -167,11 +177,6 @@ public class TransactionFailoverSpringBoot implements CommandLineRunner {
          //Shut down listeners and scheduled tasks
          log.info("Stop applicationContext");
          applicationContext.close();
-
-         log.info("Shut down servers");
-         ServerUtil.killServer(server0);
-         ServerUtil.killServer(server1);
-         log.info("Done");
       }
    }
 

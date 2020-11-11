@@ -45,7 +45,7 @@ public class ModeTransactionManagerAutoStartupDisabled {
     public JmsListenerContainerFactory<?> msgFactory(ConnectionFactory connectionFactory
                                                      ,DefaultJmsListenerContainerFactoryConfigurer configurer
                                                      ,PlatformTransactionManager transactionManager ) {
-        log.info("Custom JmsListenerContainerFactory is created.");
+        log.info("JMS_TRANSACTION_MANAGER_AUTOSTARTUP_DISABLED DefaultJmsListenerContainerFactory is created.");
         DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
         factory.setTransactionManager(transactionManager); //setSessionTransacted=true is set by initialize() if TransactionManager is set
         factory.setConnectionFactory(connectionFactory);
